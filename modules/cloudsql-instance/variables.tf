@@ -139,3 +139,7 @@ variable "users" {
   type        = map(string)
   default     = null
 }
+# variable "zone" {
+#   description = "zone of the primary instance."
+#   type        = string
+# }
