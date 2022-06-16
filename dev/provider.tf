@@ -8,6 +8,9 @@ terraform {
       source  = "hashicorp/google-beta"
       version = ">= 3.57.0"
     }
+    kubernetes={
+      source="hashicorp/kubernetes"
+    }
   }
 }
 
@@ -24,3 +27,10 @@ provider "google" {
     
     
 }
+# data "google_client_config" "default" {}
+
+# provider "kubernetes" {
+#   host                   = "https://${module.cluster_1.endpoint}"
+#   token                  = data.google_client_config.default.access_token
+#   cluster_ca_certificate = base64decode(module.cluster_1.ca_certificate)
+# }

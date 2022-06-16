@@ -3,7 +3,8 @@ module "vpc" {
   project_id = var.project_id
   name       = "my-network-module"
   psa_config = {
-    ranges = { cloud-sql = "10.60.0.0/20" }
+    ranges = { cloud-sql = "/16"
+     }
     routes = null
   }
   
@@ -40,38 +41,53 @@ resource "google_project_service" "service" {
     "cloudbuild.googleapis.com",
     "container.googleapis.com",
     "cloudbilling.googleapis.com",
-    "servicenetworking.googleapis.com"
+    "servicenetworking.googleapis.com",
+    "secretmanager.googleapis.com"
 
   ])
 
   service = each.key
 
   project            = var.project_id
-  disable_on_destroy = true
+  disable_on_destroy = false
 }
-module "db" {
-  source           = "../modules/cloudsql-instance"
-  project_id       = var.project_id
-  network          = module.vpc.network.self_link
-  name             = "samp-priv-db"
-  region           = "europe-west1"
-  database_version = "POSTGRES_13"
-  tier             = "db-g1-small"
+# module "db" {
+#   count  =1
+#   source           = "../modules/cloudsql-instance"
+#   project_id       = var.project_id
+#   network          = module.vpc.network.self_link
+#   name             = "samp1-priv-db-3"
+#   region           = "europe-west1"
+#   database_version = "POSTGRES_13"
+#   tier             = "db-g1-small"
+  
+#   availability_type = "REGIONAL"
 
-#  authorized_networks = {
+# #  authorized_networks = {
     
-#     name="gke-clusters"
-#     value="10.0.0.0/24"
+# #     name="gke-clusters"
+# #     value="0.0.0.0/0"
     
     
-#     }
+# #     }
+#   databases = [
+#     "my-db-1"
+#   ]
+
+#   users = {
+#     # generatea password for user1
+#     "admin" = null
+#     # assign a password to user2
+#     user1  = "mypassword"
+#   }
 
 
 
-  depends_on = [
-    module.vpc.psa_config
-  ]
-}
+
+#   depends_on = [
+#     module.vpc.psa_config
+#   ]
+# }
 # resource "google_container_cluster" "primary" {
 #   name     = "${var.project_id}-gke"
 #   location = var.region
@@ -86,7 +102,7 @@ module "db" {
 #   # secondary_range_pods      = "pods"
 #   # secondary_range_services  = "services"
 # }
-module "cluster-1" {
+module "cluster_1" {
   source                    = "../modules/gke-cluster"
   project_id                = var.project_id
   name                      = "my-cluster-1"
@@ -126,98 +142,288 @@ module "cluster-1" {
   labels = {
     environment = "dev"
   }
+
+}
+
+data "google_client_config" "default" {
+  provider = google
+}
+data "google_client_config" "default1" {
+  provider = google-beta
+}
+
+provider "kubernetes" {
+  host                   = "https://${module.cluster_1.endpoint}"
+  token                  = data.google_client_config.default.access_token
+  cluster_ca_certificate = base64decode(module.cluster_1.ca_certificate)
+}
+# resource "kubernetes_namespace" "awesome-namespace" {
+
+#   #  depends_on = [
+#   #   module.cluster_1,google_client_config.default
+#   # ]
+
+#  metadata {
+#    name = "awesome-namespace"
+#  }
+# }
+
+# resource "kubernetes_namespace" "prod" {
+#   metadata {
+#     annotations = {
+#       name = "my-namespace"
+#     }
+
+#     labels = {
+#       namespace = "demo_name"
+#     }
+
+#     name = "demname"
+#   }
+#   # depends_on = [
+#   #   module.cluster_1,google_client_config.default
+#   # ]
+# }
+module "nat" {
+  source         = "../modules/net-cloudnat"
+  project_id     = var.project_id
+  region         = "europe-west1"
+  name           = "internet-access"
+  router_network = module.vpc.network.self_link
+}
+
+module "bucket" {
+  source     = "../modules/gcs"
+  project_id = var.project_id
+  prefix     = "test"
+  name       = "automate-gcs-rox-01"
+  iam = {
+    "roles/storage.admin" = ["serviceAccount:858144231994@cloudbuild.gserviceaccount.com"]
+  }
+
+}
+# output "password" {
+#   sensitive = true
+#   value = module.db.user_passwords
+# }
+# module "bigquery-dataset" {
+
+#   source     = "../modules/bigquery-dataset"
+#   project_id = var.project_id
+#   id          = "my_samp_dataset"
+#   friendly_name = "mydata"
+#   access = {
+#     dataEditor   = { role = "roles/bigquery.dataEditor", type = "user" }
+#     owner          = { role = "OWNER", type = "user" }
+#     #project_owners = { role = "OWNER", type = "special_group" }
+#     #view_1         = { role = "READER", type = "view" }
+#   }
+#   access_identities = {
+#     dataEditor   = "858144231994@cloudbuild.gserviceaccount.com"
+#     dataEditor2 ="858144231994-compute@developer.gserviceaccount.com"
+#     owner          = "rajkartik098@gmail.com"
+#     #project_owners = "projectOwners"
+#     #view_1         = "my-project|my-dataset|my-table"
+#   }
+# }
+# module "glb" {
+
+#   source     = "../modules/net-glb"
+#   name       = "glb-test"
+#   project_id = var.project_id
+#   reserve_ip_address=true
+  
+#      url_map_config = {
+#     default_service      =  "my-bucket-backend"
+#     default_route_action = null
+#     default_url_redirect = null
+    
+    
+#     tests                = null
+#     header_action        = null
+#     host_rules           = [
+
+#    {
+#     hosts        = ["mysite2.com"]
+#     path_matcher = "mysite"
+#   }
+#     ]
+#     path_matchers = [
+#       {
+#         name = "mysite"
+#         path_rules = [
+#           {
+#             paths   = ["/*"]
+#             service = "my-bucket-backend"
+#           }
+#         ]
+#       }
+#     ]
+#   }
+  #  url_map_config = {
+  #   default_service      = "my-bucket-backend"
+  #   default_route_action = null
+  #   default_url_redirect = {strip_query=true}
+  #   tests = []
+  #   header_action = null
+  #   host_rules           = [
+  #     {
+  #     path_matcher="mysite"
+  #   hosts="my-example.com"}]
+  #   path_matchers = [
+  #     {
+  #       name = "mysite"
+  #       path_rules = [
+  #         {
+  #           paths   = ["/*"]
+  #           service = "my-bucket-backend"
+  #         }
+  #       ]
+  #     }
+  #   ]
+  # }
+  #url_map_config = google_compute_url_map.urlmap
+
+# global_forwarding_rule_config = {
+#     load_balancing_scheme = "EXTERNAL"
+#     ip_protocol           = "TCP"
+#     ip_version            = "IPV6"
+#     # If not specified, 80 for https = false, 443 otherwise
+#     port_range = null
+#   }
+
+#   backend_services_config = {
+#     my-bucket-backend = {
+#       bucket_config = {
+#         bucket_name = "test-automate-gcs-rox-01"
+#         options     = null
+#       }
+#       group_config = null
+#       enable_cdn   = true
+#       cdn_config   =      ( {cache_mode  = "Cache static content"
+#       client_ttl                   = 60
+#       default_ttl                  = 60
+#       max_ttl                      = 24*60
+#       negative_caching             = null
+#       negative_caching_policy      = {}
+#       serve_while_stale            = true
+#       signed_url_cache_max_age_sec = null
+#     }
+#       )
+#     }
+#   }
+# }
+
+module "firewall" {
+  source              = "../modules/net-vpc-firewall"
+  project_id          = var.project_id
+  network             = module.vpc.network.self_link
+  admin_ranges        = []
+  http_source_ranges  = []
+  https_source_ranges = []
+  ssh_source_ranges   = []
+  custom_rules = {
+    allow-https = {
+      description          = "Allow HTTPS networks."
+      direction            = "INGRESS"
+      action               = "allow"
+      sources              = []
+      ranges               = ["0.0.0.0/0"]
+      targets              = []
+      use_service_accounts = false
+      rules                = [{ protocol = "tcp", ports = [80,443] }]
+      extra_attributes     = {}
+    }
+  }
+}
+
+
+module "secret-manager" {
+  source     = "../modules/secret-manager"
+  project_id = var.project_id
+  secrets    = {
+    client_app_mybox_www   = null
+    test-manual-api = null
+  }
+  labels={
+    client_app_mybox_www = { group = "group-capp-ci-dev-www"},
+    test-manual-api = { group = "group-capp-ci-dev-api"}
+    }
+
+
+  
+  versions = {
+    client_app_mybox_www = {
+      v1 = { enabled = false, data = "auto foo bar baz" }
+      v2 = { enabled = true, data = "auto foo bar spam" }
+    },
+    test-manual-api = {
+      v1 = { enabled = true, data = "manual foo bar spam" }
+    }
+  }
+  depends_on = [
+    google_project_service.service
+  ]
+}
+
+module "container_registry" {
+  source     = "../modules/container-registry"
+  project_id = var.project_id
+  location   = "EU"
+  iam = {
+    "roles/storage.admin" = ["serviceAccount:858144231994@cloudbuild.gserviceaccount.com"]
+  }
 }
 
 
 
 
-# resource "random_id" "name" {
-#   byte_length = 2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# output "backe" {
+#   value = module.glb.backend_services.bucket["my-bucket-backend"].id
 # }
 
-# locals {
-#   # If name_override is specified, use that - otherwise use the name_prefix with a random string
-#   instance_name        = var.name_override == null ? format("%s-%s", var.name_prefix, random_id.name.hex) : var.name_override
-#   private_network_name = "private-network-${random_id.name.hex}"
-#   private_ip_name      = "private-ip-${random_id.name.hex}"
-# }
+# resource "google_compute_url_map" "urlmap" {
+#   name="url map"
+  
+#   default_service = module.glb.backend_services.bucket["my-bucket-backend"].id
 
-# # ------------------------------------------------------------------------------
-# # CREATE COMPUTE NETWORKS
-# # ------------------------------------------------------------------------------
-
-# # Simple network, auto-creates subnetworks
-# resource "google_compute_network" "private_network" {
-#   provider = google-beta
-#   name     = local.private_network_name
-# }
-
-# # Reserve global internal address range for the peering
-# resource "google_compute_global_address" "private_ip_address" {
-#   provider      = google-beta
-#   name          = local.private_ip_name
-#   purpose       = "VPC_PEERING"
-#   address_type  = "INTERNAL"
-#   prefix_length = 16
-#   network       = google_compute_network.private_network.self_link
-# }
-
-# # Establish VPC network peering connection using the reserved address range
-# resource "google_service_networking_connection" "private_vpc_connection" {
-#   provider                = google-beta
-#   network                 = google_compute_network.private_network.self_link
-#   service                 = "servicenetworking.googleapis.com"
-#   reserved_peering_ranges = [google_compute_global_address.private_ip_address.name]
-# }
-
-# # ------------------------------------------------------------------------------
-# # CREATE DATABASE INSTANCE WITH PRIVATE IP
-# # ------------------------------------------------------------------------------
-
-# module "postgres" {
-#   # When using these modules in your own templates, you will need to use a Git URL with a ref attribute that pins you
-#   # to a specific version of the modules, such as the following example:
-#   # source = "github.com/gruntwork-io/terraform-google-sql.git//modules/cloud-sql?ref=v0.2.0"
-#   source = "../../modules/cloud-sql"
-
-#   project = var.project
-#   region  = var.region
-#   name    = local.instance_name
-#   db_name = var.db_name
-
-#   engine       = var.postgres_version
-#   machine_type = var.machine_type
-
-#   # To make it easier to test this example, we are disabling deletion protection so we can destroy the databases
-#   # during the tests. By default, we recommend setting deletion_protection to true, to ensure database instances are
-#   # not inadvertently destroyed.
-#   deletion_protection = false
-
-#   # These together will construct the master_user privileges, i.e.
-#   # 'master_user_name'@'master_user_host' IDENTIFIED BY 'master_user_password'.
-#   # These should typically be set as the environment variable TF_VAR_master_user_password, etc.
-#   # so you don't check these into source control."
-#   master_user_password = var.master_user_password
-
-#   master_user_name = var.master_user_name
-#   master_user_host = "%"
-
-#   # Pass the private network link to the module
-#   private_network = google_compute_network.private_network.self_link
-
-#   # Wait for the vpc connection to complete
-#   dependencies = [google_service_networking_connection.private_vpc_connection.network]
-
-#   custom_labels = {
-#     test-id = "postgres-private-ip-example"
+#   host_rule {
+#     hosts        = ["mysite.com"]
+#     path_matcher = "mysite"
 #   }
+
+
+#   path_matcher {
+#     name            = "mysite"
+#     default_service = module.glb.backend_services.bucket["my-bucket-backend"].id
+
+#     path_rule {
+#       paths   = ["/*"]
+#       service = module.glb.backend_services.bucket["my-bucket-backend"].id
+#     }
+
+
+#   }
+
+
 # }
 
-# module "sql_cloud-sql" {
-#   source  = "gruntwork-io/sql/google//modules/cloud-sql"
-#   version = "0.6.0"
-#   db_name="private-db"
-#   private_network=
 
-#   # insert the 13 required variables here
-# }
