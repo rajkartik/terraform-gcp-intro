@@ -1,7 +1,7 @@
 variable "region" {
   type        = string
   description = "Default region to use for the project"
-  default     = "europe-north1"
+  default     = "europe-west1"
 }
 variable "subnet_gke" {
   type        = string
@@ -11,7 +11,7 @@ variable "subnet_gke" {
 variable "zone" {
   type        = string
   description = "Default zone to use for MIG runner deployment"
-  default     = "europe-north1-b"
+  default     = "europe-west1-b"
 }
 variable "project_id" {
   type        = string

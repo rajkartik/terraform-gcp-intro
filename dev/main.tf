@@ -42,7 +42,8 @@ resource "google_project_service" "service" {
     "container.googleapis.com",
     "cloudbilling.googleapis.com",
     "servicenetworking.googleapis.com",
-    "secretmanager.googleapis.com"
+    "secretmanager.googleapis.com",
+    "iap.googleapis.com"
 
   ])
 
@@ -51,43 +52,47 @@ resource "google_project_service" "service" {
   project            = var.project_id
   disable_on_destroy = false
 }
-# module "db" {
-#   count  =1
-#   source           = "../modules/cloudsql-instance"
-#   project_id       = var.project_id
-#   network          = module.vpc.network.self_link
-#   name             = "samp1-priv-db-3"
-#   region           = "europe-west1"
-#   database_version = "POSTGRES_13"
-#   tier             = "db-g1-small"
+module "db" {
+  count  =1
+  source           = "../modules/cloudsql-instance"
+  project_id       = var.project_id
+  network          = module.vpc.network.self_link
+  name             = "samp1-priv-db-4"
+  region           = "europe-west1"
+  database_version = "POSTGRES_13"
+  tier             = "db-g1-small"
   
-#   availability_type = "REGIONAL"
+  availability_type = "REGIONAL"
 
-# #  authorized_networks = {
+ authorized_networks = {
     
-# #     name="gke-clusters"
-# #     value="0.0.0.0/0"
+    name="gke-master"
+    value="172.16.0.32/28"
     
     
-# #     }
-#   databases = [
-#     "my-db-1"
-#   ]
+    }
+  databases = [
+    "my-db-1"
+  ]
 
-#   users = {
-#     # generatea password for user1
-#     "admin" = null
-#     # assign a password to user2
-#     user1  = "mypassword"
-#   }
-
-
+  users = {
+    # generatea password for user1
+    "admin" = null
+    # assign a password to user2
+    user1  = "mypassword"
+  }
 
 
-#   depends_on = [
-#     module.vpc.psa_config
-#   ]
-# }
+
+
+  depends_on = [
+    module.vpc.psa_config
+  ]
+}
+
+
+
+
 # resource "google_container_cluster" "primary" {
 #   name     = "${var.project_id}-gke"
 #   location = var.region
@@ -197,6 +202,34 @@ module "bucket" {
   project_id = var.project_id
   prefix     = "test"
   name       = "automate-gcs-rox-01"
+  cors = {
+
+    origin = ["*"]
+
+    method = ["GET", "PUT", "POST", ]
+
+    response_header = [
+
+      "Content-Type",
+
+      "Content-MD5",
+
+      "Content-Disposition",
+
+      "Cache-Control",
+
+      "x-goog-content-length-range",
+
+      "x-goog-meta-filename"
+
+    ]
+
+    max_age_seconds = 3600
+
+  }
+
+
+
   iam = {
     "roles/storage.admin" = ["serviceAccount:858144231994@cloudbuild.gserviceaccount.com"]
   }
@@ -226,40 +259,40 @@ module "bucket" {
 #     #view_1         = "my-project|my-dataset|my-table"
 #   }
 # }
-# module "glb" {
+module "glb" {
 
-#   source     = "../modules/net-glb"
-#   name       = "glb-test"
-#   project_id = var.project_id
-#   reserve_ip_address=true
+  source     = "../modules/net-glb"
+  name       = "glb-test"
+  project_id = var.project_id
+  reserve_ip_address=true
   
-#      url_map_config = {
-#     default_service      =  "my-bucket-backend"
-#     default_route_action = null
-#     default_url_redirect = null
+     url_map_config = {
+    default_service      =  "my-bucket-backend"
+    default_route_action = null
+    default_url_redirect = null
     
     
-#     tests                = null
-#     header_action        = null
-#     host_rules           = [
+    tests                = null
+    header_action        = null
+    host_rules           = [
 
-#    {
-#     hosts        = ["mysite2.com"]
-#     path_matcher = "mysite"
-#   }
-#     ]
-#     path_matchers = [
-#       {
-#         name = "mysite"
-#         path_rules = [
-#           {
-#             paths   = ["/*"]
-#             service = "my-bucket-backend"
-#           }
-#         ]
-#       }
-#     ]
-#   }
+   {
+    hosts        = ["mysite2.com"]
+    path_matcher = "mysite"
+  }
+    ]
+    path_matchers = [
+      {
+        name = "mysite"
+        path_rules = [
+          {
+            paths   = ["/*"]
+            service = "my-bucket-backend"
+          }
+        ]
+      }
+    ]
+  }
   #  url_map_config = {
   #   default_service      = "my-bucket-backend"
   #   default_route_action = null
@@ -292,27 +325,30 @@ module "bucket" {
 #     port_range = null
 #   }
 
-#   backend_services_config = {
-#     my-bucket-backend = {
-#       bucket_config = {
-#         bucket_name = "test-automate-gcs-rox-01"
-#         options     = null
-#       }
-#       group_config = null
-#       enable_cdn   = true
-#       cdn_config   =      ( {cache_mode  = "Cache static content"
-#       client_ttl                   = 60
-#       default_ttl                  = 60
-#       max_ttl                      = 24*60
-#       negative_caching             = null
-#       negative_caching_policy      = {}
-#       serve_while_stale            = true
-#       signed_url_cache_max_age_sec = null
-#     }
-#       )
-#     }
-#   }
-# }
+  backend_services_config = {
+    my-bucket-backend = {
+      bucket_config = {
+        bucket_name = "test-automate-gcs-rox-01"
+        options     = null
+      }
+      group_config = null
+      enable_cdn   = true
+      cdn_config   =      ( {cache_mode  = "Cache static content"
+      client_ttl                   = 60
+      default_ttl                  = 60
+      max_ttl                      = 24*60
+      negative_caching             = null
+      negative_caching_policy      = {}
+      serve_while_stale            = true
+      signed_url_cache_max_age_sec = null
+    }
+      )
+    }
+  }
+}
+
+
+
 
 module "firewall" {
   source              = "../modules/net-vpc-firewall"
@@ -346,8 +382,8 @@ module "secret-manager" {
     test-manual-api = null
   }
   labels={
-    client_app_mybox_www = { group = "group-capp-ci-dev-www"},
-    test-manual-api = { group = "group-capp-ci-dev-api"}
+    client_app_mybox_www = { group = "group-capp-ci-dev-${local.s_grps[0]}"},
+    test-manual-api = { group = "group-capp-ci-dev-${local.s_grps[1]}"}
     }
 
 
@@ -376,6 +412,66 @@ module "container_registry" {
 }
 
 
+
+module "my_service_account" {
+  source       = "../modules/iam-service-account"
+  project_id   = var.project_id
+  name         = "my-sa-dev"
+  generate_key = true
+
+  iam_project_roles = {
+    "${var.project_id}" = [
+      "roles/cloudsql.client",
+      "roles/iam.serviceAccountTokenCreator",
+      "roles/pubsub.editor",
+      "roles/container.admin"
+
+    ]
+  }
+
+}
+
+
+# resource "google_service_account" "workload_identity_sa" {
+#   project      = local.project_id
+#   account_id   = "workload-identity-iam-sa"
+#   display_name = "A service account to be used by GKE Workload Identity"
+# }
+
+# Binding between IAM SA and Kubernetes SA
+resource "google_service_account_iam_binding" "gke_iam_binding" {
+  service_account_id = module.my_service_account.name
+  role               = "roles/iam.workloadIdentityUser"
+
+  members = [
+    # "serviceAccount:<PROJECT_ID>.svc.id.goog[<KUBERNETES_NAMESPACE>/<HELM_PACKAGE_INSTALLED_NAME>-common-backend]"
+    "serviceAccount:${var.project_id}.svc.id.goog[cart/carto-common-backend]",
+  ]
+}
+
+
+
+
+
+
+
+module "bastion_vm_gke" {
+  source = "terraform-google-modules/bastion-host/google"
+
+  project = var.project_id
+  network = module.vpc.network.self_link
+  subnet  = module.vpc.subnet_self_links["${var.region}/${var.subnet_gke}"]
+  zone    = var.zone
+  #service_account_email = module.my_service_account.email
+  # depends_on = [
+  #   module.climate-engine-service-account
+  # ]
+  depends_on = [module.vpc.psa_config,
+    google_project_service.service
+  ]
+  members = ["serviceAccount:${module.my_service_account.email}"]
+
+}
 
 
 
